@@ -17,7 +17,7 @@
 
 /* TODO:
  * - timers
- * - write, error types of sockets
+ * - error types of sockets
  * - delete all allocated objects on destroy
  * - remove socket from the list on cleanup
  */
@@ -192,26 +192,56 @@ static void fdMaybeCleanup(QAsioSockNotifier *sn)
 }
 
 static void fdReadStart(QAsioSockNotifier *sn);
+static void fdWriteStart(QAsioSockNotifier *sn);
 
 static void fdReadReady(QAsioSockNotifier *sn, const boost::system::error_code& error, int revision)
 {
     sn->pending_operations--;
+    int type = (int)QSocketNotifier::Read;
     //std::clog<< __PRETTY_FUNCTION__ << LOG(error.message()) << LOG(socket) << std::endl;
-    bool sn_changed = sn->revision[(int)QSocketNotifier::Read] != revision;
+    bool sn_changed = sn->revision[type] != revision;
 
     if(!sn_changed && !error) {
-        QEvent event(QEvent::SockAct);
-        QCoreApplication::sendEvent(sn->notif[QSocketNotifier::Read], &event);
         fdReadStart(sn);
+        QEvent event(QEvent::SockAct);
+        QCoreApplication::sendEvent(sn->notif[type], &event);
     }
-    fdMaybeCleanup(sn);
+    else {
+        fdMaybeCleanup(sn);
+    }
+}
+
+static void fdWriteReady(QAsioSockNotifier *sn, const boost::system::error_code& error, int revision)
+{
+    sn->pending_operations--;
+    int type = (int)QSocketNotifier::Write;
+    //std::clog<< __PRETTY_FUNCTION__ << LOG(error.message()) << LOG(socket) << std::endl;
+    bool sn_changed = sn->revision[type] != revision;
+
+    if(!sn_changed && !error) {
+        fdWriteStart(sn);
+        QEvent event(QEvent::SockAct);
+        QCoreApplication::sendEvent(sn->notif[type], &event);
+    }
+    else {
+        fdMaybeCleanup(sn);
+    }
 }
 
 static void fdReadStart(QAsioSockNotifier *sn)
 {
     int type = (int)QSocketNotifier::Read;
     sn->pending_operations++;
+    Q_ASSERT(sn->notif[type]);
     sn->sd->async_read_some(boost::asio::null_buffers(), boost::bind(fdReadReady, sn, _1, sn->revision[type]));
+}
+
+static void fdWriteStart(QAsioSockNotifier *sn)
+{
+    int type = (int)QSocketNotifier::Write;
+    sn->pending_operations++;
+    Q_ASSERT(sn->notif[type]);
+    sn->sd->async_write_some(boost::asio::null_buffers(), boost::bind(fdWriteReady, sn, _1, sn->revision[type]));
 }
 
 void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
@@ -247,6 +277,11 @@ void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
         case QSocketNotifier::Read:
             fdReadStart(sn);
             break;
+        case QSocketNotifier::Write:
+            fdWriteStart(sn);
+            break;
+        default:
+            qFatal("Not supported socket type");
         //TODO: write, error...
     }
 }
@@ -338,6 +373,9 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
     if ((flags & QEventLoop::X11ExcludeTimers)) {
         //FIXME: ignore timers?
     }
+
+    QCoreApplication::sendPostedEvents(); //again?
+
 
     // return true if we handled events, false otherwise
     return QWindowSystemInterface::sendWindowSystemEvents(flags) || (nevents > 0);
