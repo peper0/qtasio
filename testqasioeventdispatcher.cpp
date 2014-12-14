@@ -58,7 +58,7 @@ void TestQAsioEventDispatcher::qsocketReadWrite()
 
     QTcpSocket *server_socket = server->nextPendingConnection();
     QVERIFY(server_socket);
-   // if(!server_socket) return;
+
     QObject::connect(server_socket, &QTcpSocket::disconnected, [&clientsConnected]()
     {
         clientsConnected--;
@@ -146,7 +146,14 @@ void TestQAsioEventDispatcher::qtimers()
 
 void TestQAsioEventDispatcher::guiEvents()
 {
-
+    MainWindow w;
+    qDebug() << "showing main window";
+    w.show();
+    //TODO: do widgets handle clicks, keypresses and so on properly? Does it receive "paint" signals?
+    //app->processEvents(QEventLoop::WaitForMoreEvents);
+#ifdef INTERACTIVE_TEST
+    app->exec();
+#endif
 }
 
 
@@ -157,15 +164,40 @@ void TestQAsioEventDispatcher::cleanupTestCase()
         app->quit();
     });
     timer1.setSingleShot(true);
-    timer1.start(0);
+    timer1.start(1);
     qDebug("waiting for clean exit");
     app->exec();
-    //app->processEvents();
     qDebug("destroying QApplication");
     delete app;
     app = 0;
 }
 
-QTEST_APPLESS_MAIN(TestQAsioEventDispatcher)
+MainWindow::MainWindow(QWidget *parent) :
+    QMainWindow(parent),
+    ui(new Ui_MainWindow)
+{
+    ui->setupUi(this);
+}
 
-//#include "testqasioeventdispatcher.moc"
+MainWindow::~MainWindow()
+{
+    delete ui;
+}
+
+void MainWindow::paintEvent(QPaintEvent *)
+{
+    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *)
+{
+    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+}
+
+void MainWindow::on_pushButton_clicked()
+{
+    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+}
+
+
+QTEST_APPLESS_MAIN(TestQAsioEventDispatcher)

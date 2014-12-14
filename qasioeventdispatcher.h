@@ -40,30 +40,18 @@ public:
     explicit QAsioEventDispatcher(boost::asio::io_service &io_service, QObject *parent = 0);
     ~QAsioEventDispatcher();
 
-    //TODO: in progress
     bool processEvents(QEventLoop::ProcessEventsFlags flags);
-    //TODO: done, not tested
     bool hasPendingEvents();
-    //TODO: done, not tested
     void registerSocketNotifier(QSocketNotifier *notifier) Q_DECL_FINAL;
-    //TODO: done, not tested
     void unregisterSocketNotifier(QSocketNotifier *notifier) Q_DECL_FINAL;
 
-    //TODO:
     void registerTimer(int timerId, int interval, Qt::TimerType timerType, QObject *object) Q_DECL_FINAL;
-    //TODO:
     bool unregisterTimer(int timerId) Q_DECL_FINAL;
-    //TODO:
     bool unregisterTimers(QObject *object) Q_DECL_FINAL;
-    //TODO:
     QList<TimerInfo> registeredTimers(QObject *object) const Q_DECL_FINAL;
-
-    //TODO:
     int remainingTime(int timerId) Q_DECL_FINAL;
 
-    //TODO: in progress
     void wakeUp() Q_DECL_FINAL;
-    //TODO: in progress
     void interrupt() Q_DECL_FINAL;
     //TODO:
     void flush();

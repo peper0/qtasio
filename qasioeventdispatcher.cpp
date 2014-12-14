@@ -19,10 +19,8 @@
 
 
 /* TODO:
- * - timers
  * - error types of sockets
- * - delete all allocated objects on destroy
- * - remove socket from the list on cleanup
+ * - handling flags passed to processEvents
  */
 
 // One object per fd; three QSocketNotifier's may be connected to it;
@@ -35,10 +33,6 @@ struct QAsioSockNotifier
     int pending_operations = 0;
 };
 
-struct QAsioTimer
-{
-};
-
 class Q_CORE_EXPORT QAsioEventDispatcherPrivate : public QAbstractEventDispatcherPrivate
 {
     Q_DECLARE_PUBLIC(QAsioEventDispatcher)
@@ -47,16 +41,9 @@ public:
     QAsioEventDispatcherPrivate(boost::asio::io_service &io_service);
     ~QAsioEventDispatcherPrivate();
 
-    //int doSelect(QEventLoop::ProcessEventsFlags flags, timespec *timeout);
-    //virtual int initThreadWakeUp() FINAL_EXCEPT_BLACKBERRY;
-    //virtual int processThreadWakeUp(int nsel) FINAL_EXCEPT_BLACKBERRY;
-
-    //bool mainThread;
-
     boost::asio::io_service &io_service;
     boost::asio::steady_timer nearest_timer;
     QList<QAsioSockNotifier *> socketNotifiers;
-    //QList<QAsioTimer *> timers;
     QTimerInfoList timerList;
 
     QAtomicInt interrupt;
@@ -82,6 +69,18 @@ QAsioEventDispatcherPrivate::~QAsioEventDispatcherPrivate()
     qDeleteAll(timerList);
 }
 
+QAsioEventDispatcher::QAsioEventDispatcher(boost::asio::io_service &io_service, QObject *parent)
+    : QAbstractEventDispatcher(*new QAsioEventDispatcherPrivate(io_service), parent)
+{
+}
+
+QAsioEventDispatcher::QAsioEventDispatcher(QAsioEventDispatcherPrivate &dd, QObject *parent)
+    : QAbstractEventDispatcher(dd, parent)
+{ }
+
+QAsioEventDispatcher::~QAsioEventDispatcher()
+{
+}
 
 void QAsioEventDispatcherPrivate::timerTimeout(const boost::system::error_code& error)
 {
@@ -98,7 +97,7 @@ void QAsioEventDispatcherPrivate::timerStart()
 #else
     using namespace boost::chrono;
 #endif
-    if (/*!(src->processEventsFlags & QEventLoop::X11ExcludeTimers) && */timerList.timerWait(tv)) {
+    if (/*FIXME: !(src->processEventsFlags & QEventLoop::X11ExcludeTimers) && */timerList.timerWait(tv)) {
         nearest_timer.cancel();
         nearest_timer.expires_from_now(seconds(tv.tv_sec) + nanoseconds(tv.tv_nsec ));
         nearest_timer.async_wait(boost::bind(&QAsioEventDispatcherPrivate::timerTimeout, this, _1));
@@ -108,20 +107,6 @@ void QAsioEventDispatcherPrivate::timerStart()
 void QAsioEventDispatcherPrivate::timerCancel()
 {
     nearest_timer.cancel();
-}
-
-
-QAsioEventDispatcher::QAsioEventDispatcher(boost::asio::io_service &io_service, QObject *parent)
-    : QAbstractEventDispatcher(*new QAsioEventDispatcherPrivate(io_service), parent)
-{
-}
-
-QAsioEventDispatcher::QAsioEventDispatcher(QAsioEventDispatcherPrivate &dd, QObject *parent)
-    : QAbstractEventDispatcher(dd, parent)
-{ }
-
-QAsioEventDispatcher::~QAsioEventDispatcher()
-{
 }
 
 void QAsioEventDispatcher::registerTimer(int timerId, int interval, Qt::TimerType timerType, QObject *obj)
@@ -248,7 +233,6 @@ static void fdReadReady(QAsioSockNotifier *sn, const boost::system::error_code& 
 {
     sn->pending_operations--;
     int type = (int)QSocketNotifier::Read;
-    //std::clog<< __PRETTY_FUNCTION__ << LOG(error.message()) << LOG(socket) << std::endl;
     bool sn_changed = sn->revision[type] != revision;
 
     if(!sn_changed && !error) {
@@ -264,7 +248,6 @@ static void fdWriteReady(QAsioSockNotifier *sn, const boost::system::error_code&
 {
     sn->pending_operations--;
     int type = (int)QSocketNotifier::Write;
-    //std::clog<< __PRETTY_FUNCTION__ << LOG(error.message()) << LOG(socket) << std::endl;
     bool sn_changed = sn->revision[type] != revision;
 
     if(!sn_changed && !error) {
@@ -294,7 +277,7 @@ static void fdWriteStart(QAsioSockNotifier *sn)
 
 void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
 {
-    std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket())  << std::endl;
+    //std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket())  << std::endl;
     Q_ASSERT(notifier);
     int sockfd = notifier->socket();
     int type = notifier->type();
@@ -311,7 +294,7 @@ void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
 #endif
 
     Q_D(QAsioEventDispatcher);
-    std::clog << LOG(d->socketNotifiers.size()) << std::endl;
+    //std::clog << LOG(d->socketNotifiers.size()) << std::endl;
 
     QAsioSockNotifier *sn = d->socketNotifierForFd(sockfd, true);
 
@@ -337,7 +320,7 @@ void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
 
 void QAsioEventDispatcher::unregisterSocketNotifier(QSocketNotifier *notifier)
 {
-    std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket()) << std::endl;
+    //std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket()) << std::endl;
     Q_ASSERT(notifier);
     int sockfd = notifier->socket();
     int type = notifier->type();
@@ -382,8 +365,6 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
     Q_D(QAsioEventDispatcher);
     d->interrupt.store(0);
 
-    // we are awake, broadcast it
-    //emit awake();
     //QCoreApplicationPrivate::sendPostedEvents(0, 0, d->threadData); //unix dispatcher use this
     QCoreApplication::sendPostedEvents(); //glib dispatcher call this after every call of "awake".
 
@@ -403,7 +384,7 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
     int total_events = 0; /* FIXME: +1 for stop? */
 
     if (canWait) {
-        //run at least one handler - may bloc
+        //run at least one handler - may block
         emit aboutToBlock();
         d->io_service.reset();
         total_events += d->io_service.run_one();
@@ -422,7 +403,7 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         events = d->io_service.poll();
 
         if ((flags & QEventLoop::ExcludeSocketNotifiers)) {
-            //FIXME: ignore stream descriptoss
+            //FIXME: ignore stream descriptors
         }
 
         if ((flags & QEventLoop::X11ExcludeTimers)) {
@@ -430,14 +411,14 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         }
 
         total_events += events;
+        QCoreApplication::sendPostedEvents();
+        total_events += QWindowSystemInterface::sendWindowSystemEvents(flags) ? 1 : 0;
     } while(events>0);
 
     d->cleanupSocketNotifiers();
-    QCoreApplication::sendPostedEvents(); //again?
-
 
     // return true if we handled events, false otherwise
-    return QWindowSystemInterface::sendWindowSystemEvents(flags) || (total_events > 0);
+    return  (total_events > 0);
 }
 
 bool QAsioEventDispatcher::hasPendingEvents()
@@ -463,6 +444,16 @@ void QAsioEventDispatcher::interrupt()
 }
 
 void QAsioEventDispatcher::flush()
-{ }
+{
+    /* It does nothing in glib event dispatcher.
+     *
+     * QUnixEventDispatcherQPA calls QCoreApplication::instance()->sendPostedEvents here.
+     *
+     * But the docs of QAbstractEventDispatcher says:
+     * "flushes the event queue. This normally returns almost immediately. Does nothing on platforms other than X11"
+     *
+     * I'm a bit confused. FIXME
+     */
+}
 
 QT_END_NAMESPACE

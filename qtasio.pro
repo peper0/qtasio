@@ -26,13 +26,8 @@ SOURCES += \
     qasioeventdispatcher.cpp \
     testqasioeventdispatcher.cpp
 
-#main.cpp\
-#        mainwindow.cpp \
-
 HEADERS  += \
     qasioeventdispatcher.h \
     testqasioeventdispatcher.h
 
-#mainwindow.h \
-
-FORMS    += mainwindow.ui
+FORMS    +=
