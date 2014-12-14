@@ -1,6 +1,7 @@
 #include "qasioeventdispatcher.h"
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
+#include <boost/asio/steady_timer.hpp>
 #include <boost/bind.hpp>
 
 #include <qpa/qwindowsysteminterface.h>
@@ -11,6 +12,8 @@
 #include "qsocketnotifier.h"
 #include "qthread.h"
 #include "qelapsedtimer.h"
+
+#include "private/qtimerinfo_unix_p.h"
 
 #define LOG(expr) #expr": " << (expr) << "; "
 
@@ -51,17 +54,23 @@ public:
     //bool mainThread;
 
     boost::asio::io_service &io_service;
+    boost::asio::steady_timer nearest_timer;
     QList<QAsioSockNotifier *> socketNotifiers;
-    QList<QAsioTimer *> timers;
+    //QList<QAsioTimer *> timers;
+    QTimerInfoList timerList;
 
     QAtomicInt interrupt;
     QAsioSockNotifier *socketNotifierForFd(int fd, bool createIfNotFound);
     void removeSocketNotifier(QAsioSockNotifier *sn);
+    void timerTimeout(const boost::system::error_code &error);
+    void timerStart();
+    void timerCancel();
 };
 
 
 QAsioEventDispatcherPrivate::QAsioEventDispatcherPrivate(boost::asio::io_service &io_service_)
     : io_service(io_service_)
+    , nearest_timer(io_service)
 {
 }
 
@@ -69,12 +78,42 @@ QAsioEventDispatcherPrivate::~QAsioEventDispatcherPrivate()
 {
     // cleanup timers
     qDeleteAll(socketNotifiers);
-    qDeleteAll(timers);
+    qDeleteAll(timerList);
 }
+
+
+void QAsioEventDispatcherPrivate::timerTimeout(const boost::system::error_code& error)
+{
+    if(!error) {
+        (void) timerList.activateTimers();
+    }
+}
+
+void QAsioEventDispatcherPrivate::timerStart()
+{
+    timespec tv = { 0l, 0l };
+#if BOOST_ASIO_HAS_STD_CHRONO
+    using namespace std::chrono;
+#else
+    using namespace boost::chrono;
+#endif
+    if (/*!(src->processEventsFlags & QEventLoop::X11ExcludeTimers) && */timerList.timerWait(tv)) {
+        nearest_timer.cancel();
+        nearest_timer.expires_from_now(seconds(tv.tv_sec) + nanoseconds(tv.tv_nsec ));
+        nearest_timer.async_wait(boost::bind(&QAsioEventDispatcherPrivate::timerTimeout, this, _1));
+    }
+}
+
+void QAsioEventDispatcherPrivate::timerCancel()
+{
+    nearest_timer.cancel();
+}
+
 
 QAsioEventDispatcher::QAsioEventDispatcher(boost::asio::io_service &io_service, QObject *parent)
     : QAbstractEventDispatcher(*new QAsioEventDispatcherPrivate(io_service), parent)
-{ }
+{
+}
 
 QAsioEventDispatcher::QAsioEventDispatcher(QAsioEventDispatcherPrivate &dd, QObject *parent)
     : QAbstractEventDispatcher(dd, parent)
@@ -97,7 +136,7 @@ void QAsioEventDispatcher::registerTimer(int timerId, int interval, Qt::TimerTyp
 #endif
 
     Q_D(QAsioEventDispatcher);
-    //d->timerList.registerTimer(timerId, interval, timerType, obj);
+    d->timerList.registerTimer(timerId, interval, timerType, obj);
 }
 
 /*!
@@ -116,8 +155,7 @@ bool QAsioEventDispatcher::unregisterTimer(int timerId)
 #endif
 
     Q_D(QAsioEventDispatcher);
-//    return d->timerList.unregisterTimer(timerId);
-    return true;
+    return d->timerList.unregisterTimer(timerId);
 }
 
 /*!
@@ -136,8 +174,7 @@ bool QAsioEventDispatcher::unregisterTimers(QObject *object)
 #endif
 
     Q_D(QAsioEventDispatcher);
-    //return d->timerList.unregisterTimers(object);
-    return true;
+    return d->timerList.unregisterTimers(object);
 }
 
 QList<QAsioEventDispatcher::TimerInfo>
@@ -149,8 +186,20 @@ QAsioEventDispatcher::registeredTimers(QObject *object) const
     }
 
     Q_D(const QAsioEventDispatcher);
-    //return d->timerList.registeredTimers(object);
-    return {};
+    return d->timerList.registeredTimers(object);
+}
+
+int QAsioEventDispatcher::remainingTime(int timerId)
+{
+#ifndef QT_NO_DEBUG
+    if (timerId < 1) {
+        qWarning("QAsioEventDispatcher::remainingTime: invalid argument");
+        return -1;
+    }
+#endif
+    //FIXME
+    Q_D(QAsioEventDispatcher);
+    return d->timerList.timerRemainingTime(timerId);
 }
 
 QAsioSockNotifier *QAsioEventDispatcherPrivate::socketNotifierForFd(int fd, bool createIfNotFound)
@@ -347,38 +396,47 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         return false; //unix event dispatcher returns false if nothing more than "postedEvents" were dispatched
     }
 
-    //FIXME: we should exit from "procesEvents" when some timer elapsed?
-    // return the maximum time we can wait for an event.
-    if ((flags & QEventLoop::X11ExcludeTimers)) {
-        //FIXME: ignore timers?
+    if (!(flags & QEventLoop::X11ExcludeTimers)) {
+        d->timerStart();
     }
 
-    int nevents = 0; /* FIXME: +1 for stop? */
+    int total_events = 0; /* FIXME: +1 for stop? */
 
     if (canWait) {
         //run at least one handler - may bloc
         emit aboutToBlock();
         d->io_service.reset();
-        nevents += d->io_service.run_one();
+        total_events += d->io_service.run_one();
         emit awake();
     }
-    d->io_service.reset();
-    //run all ready handlers
-    nevents += d->io_service.poll();
 
-    if ((flags & QEventLoop::ExcludeSocketNotifiers)) {
-        //FIXME: ignore stream descriptoss
-    }
+    int events;
+    do
+    {
+        if (!(flags & QEventLoop::X11ExcludeTimers)) {
+            d->timerStart();
+        }
 
-    if ((flags & QEventLoop::X11ExcludeTimers)) {
-        //FIXME: ignore timers?
-    }
+        d->io_service.reset();
+        //run all ready handlers
+        events = d->io_service.poll();
+
+        if ((flags & QEventLoop::ExcludeSocketNotifiers)) {
+            //FIXME: ignore stream descriptoss
+        }
+
+        if ((flags & QEventLoop::X11ExcludeTimers)) {
+            //FIXME: ignore timers?
+        }
+
+        total_events += events;
+    } while(events>0);
 
     QCoreApplication::sendPostedEvents(); //again?
 
 
     // return true if we handled events, false otherwise
-    return QWindowSystemInterface::sendWindowSystemEvents(flags) || (nevents > 0);
+    return QWindowSystemInterface::sendWindowSystemEvents(flags) || (total_events > 0);
 }
 
 bool QAsioEventDispatcher::hasPendingEvents()
@@ -386,20 +444,6 @@ bool QAsioEventDispatcher::hasPendingEvents()
     //This is copy-pasted from QUnixEventDispatcherQPA. I don't really understand how it works.
     extern uint qGlobalPostedEventsCount(); // from qapplication.cpp
     return qGlobalPostedEventsCount() || QWindowSystemInterface::windowSystemEventsQueued();
-}
-
-int QAsioEventDispatcher::remainingTime(int timerId)
-{
-#ifndef QT_NO_DEBUG
-    if (timerId < 1) {
-        qWarning("QAsioEventDispatcher::remainingTime: invalid argument");
-        return -1;
-    }
-#endif
-    //FIXME
-    Q_D(QAsioEventDispatcher);
-    //return d->timerList.timerRemainingTime(timerId);
-    return 999;
 }
 
 void QAsioEventDispatcher::wakeUp()

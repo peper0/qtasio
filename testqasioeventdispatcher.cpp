@@ -4,6 +4,7 @@
 
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <chrono>
 
 TestQAsioEventDispatcher::TestQAsioEventDispatcher(QObject *parent) :
     QObject(parent)
@@ -77,13 +78,70 @@ void TestQAsioEventDispatcher::qsocketReadWrite()
     app->processEvents();
     QCOMPARE(clientsConnected, 0);
 
-
+    delete socket;
+    delete server_socket;
+    delete server;
     app->processEvents();
 }
 
 void TestQAsioEventDispatcher::qtimers()
 {
+    using namespace std::chrono;
+    steady_clock::time_point tBegin, tEnd1, tEnd2;
+    tBegin = steady_clock::now();
+    tEnd1 = tEnd2 = tBegin;
+    auto timer1 = new QTimer(this);
+    QObject::connect(timer1, &QTimer::timeout, [&](){
+        tEnd1 = steady_clock::now();
+    });
 
+    auto timer2 = new QTimer(this);
+    QObject::connect(timer2, &QTimer::timeout, [&](){
+        tEnd2 = steady_clock::now();
+    });
+
+    const int TOLERANCE = 50;
+
+    timer1->setSingleShot(false);
+    timer1->start(200);
+    timer2->setSingleShot(true);
+    timer2->start(300);
+
+    app->processEvents(QEventLoop::WaitForMoreEvents);
+    {
+        auto timerDuration = tEnd1 - tBegin;
+        qDebug() << "timer1Duration: " << duration_cast<milliseconds>(timerDuration).count();
+        QVERIFY(timerDuration > milliseconds(200-TOLERANCE));
+        QVERIFY(timerDuration < milliseconds(200+TOLERANCE));
+    }
+    app->processEvents(QEventLoop::WaitForMoreEvents);
+    {
+        auto timerDuration = tEnd2 - tBegin;
+        qDebug() << "timer2Duration: " << duration_cast<milliseconds>(timerDuration).count();
+        QVERIFY(timerDuration > milliseconds(300-TOLERANCE));
+        QVERIFY(timerDuration < milliseconds(300+TOLERANCE));
+    }
+    timer1->start(200);
+    app->processEvents(QEventLoop::WaitForMoreEvents);
+    {
+        auto timerDuration = tEnd1 - tBegin;
+        qDebug() << "timer1Duration: " << duration_cast<milliseconds>(timerDuration).count();
+        QVERIFY(timerDuration > milliseconds(500-TOLERANCE));
+        QVERIFY(timerDuration < milliseconds(500+TOLERANCE));
+    }
+    app->processEvents(QEventLoop::WaitForMoreEvents);
+    {
+        auto timerDuration = tEnd1 - tBegin;
+        qDebug() << "timer1Duration: " << duration_cast<milliseconds>(timerDuration).count();
+        QVERIFY(timerDuration > milliseconds(700-TOLERANCE));
+        QVERIFY(timerDuration < milliseconds(700+TOLERANCE));
+    }
+    {
+        auto timerDuration = tEnd2 - tBegin;
+        qDebug() << "timer2Duration: " << duration_cast<milliseconds>(timerDuration).count();
+        QVERIFY(timerDuration > milliseconds(300-TOLERANCE));
+        QVERIFY(timerDuration < milliseconds(300+TOLERANCE));
+    }
 }
 
 void TestQAsioEventDispatcher::guiEvents()

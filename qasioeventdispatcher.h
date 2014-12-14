@@ -5,7 +5,6 @@
 #include "private/qabstracteventdispatcher_p.h"
 #include <QAbstractEventDispatcher>
 
-
 /*
 
 #include "QtCore/qabstracteventdispatcher.h"
@@ -14,7 +13,6 @@
 #include "private/qcore_unix_p.h"
 #include "private/qpodlist_p.h"
 #include "QtCore/qvarlengtharray.h"
-#include "private/qtimerinfo_unix_p.h"
 
 #if !defined(Q_OS_VXWORKS)
 #  include <sys/time.h>
