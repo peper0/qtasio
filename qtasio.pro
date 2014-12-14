@@ -4,12 +4,16 @@
 #
 #-------------------------------------------------
 
-QT       += core gui core-private platformsupport-private
+QT       += core core-private platformsupport-private
+
+#only for tests
+QT       += gui testlib network
 
 greaterThan(QT_MAJOR_VERSION, 4): QT += widgets
 
-#CONFIG += c++11
+CONFIG += c++11
 CONFIG += link_pkgconfig
+CONFIG += testcase
 PKGCONFIG += glib-2.0
 
 LIBS += -lboost_system
@@ -18,11 +22,17 @@ TARGET = qtasio
 TEMPLATE = app
 
 
-SOURCES += main.cpp\
-        mainwindow.cpp \
-    qasioeventdispatcher.cpp
+SOURCES += \
+    qasioeventdispatcher.cpp \
+    testqasioeventdispatcher.cpp
 
-HEADERS  += mainwindow.h \
-    qasioeventdispatcher.h
+#main.cpp\
+#        mainwindow.cpp \
+
+HEADERS  += \
+    qasioeventdispatcher.h \
+    testqasioeventdispatcher.h
+
+#mainwindow.h \
 
 FORMS    += mainwindow.ui
