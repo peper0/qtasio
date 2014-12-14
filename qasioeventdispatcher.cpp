@@ -26,11 +26,20 @@
 // One object per fd; three QSocketNotifier's may be connected to it;
 struct QAsioSockNotifier
 {
-    QSocketNotifier *notif[3]={0, 0, 0}; //notifiers for {Read, Write, Exception}
-    int revision[3]={0, 0, 0}; //revision[x] is incremented each time notif[i] is changed (therefore a new completion handler loop is started)
+    QAsioSockNotifier()
+        : pending_operations(0)
+    {
+        for(int i=0; i<3; ++i) {
+            notif[i]=0;
+            revision[i]=0;
+        }
+    }
+
+    QSocketNotifier *notif[3]; //notifiers for {Read, Write, Exception}
+    int revision[3]; //revision[x] is incremented each time notif[i] is changed (therefore a new completion handler loop is started)
     int fd;
     boost::asio::posix::stream_descriptor *sd;
-    int pending_operations = 0;
+    int pending_operations;
 };
 
 class Q_CORE_EXPORT QAsioEventDispatcherPrivate : public QAbstractEventDispatcherPrivate
