@@ -90,22 +90,22 @@ void TestQAsioEventDispatcher::qtimers()
     steady_clock::time_point tBegin, tEnd1, tEnd2;
     tBegin = steady_clock::now();
     tEnd1 = tEnd2 = tBegin;
-    auto timer1 = new QTimer(this);
-    QObject::connect(timer1, &QTimer::timeout, [&](){
+    QTimer timer1;
+    QObject::connect(&timer1, &QTimer::timeout, [&](){
         tEnd1 = steady_clock::now();
     });
 
-    auto timer2 = new QTimer(this);
-    QObject::connect(timer2, &QTimer::timeout, [&](){
+    QTimer timer2;
+    QObject::connect(&timer2, &QTimer::timeout, [&](){
         tEnd2 = steady_clock::now();
     });
 
     const int TOLERANCE = 50;
 
-    timer1->setSingleShot(false);
-    timer1->start(200);
-    timer2->setSingleShot(true);
-    timer2->start(300);
+    timer1.setSingleShot(false);
+    timer1.start(200);
+    timer2.setSingleShot(true);
+    timer2.start(300);
 
     app->processEvents(QEventLoop::WaitForMoreEvents);
     {
@@ -121,7 +121,7 @@ void TestQAsioEventDispatcher::qtimers()
         QVERIFY(timerDuration > milliseconds(300-TOLERANCE));
         QVERIFY(timerDuration < milliseconds(300+TOLERANCE));
     }
-    timer1->start(200);
+    timer1.start(200);
     app->processEvents(QEventLoop::WaitForMoreEvents);
     {
         auto timerDuration = tEnd1 - tBegin;
@@ -152,9 +152,18 @@ void TestQAsioEventDispatcher::guiEvents()
 
 void TestQAsioEventDispatcher::cleanupTestCase()
 {
+    QTimer timer1;
+    QObject::connect(&timer1, &QTimer::timeout, [&](){
+        app->quit();
+    });
+    timer1.setSingleShot(true);
+    timer1.start(0);
+    qDebug("waiting for clean exit");
+    app->exec();
+    //app->processEvents();
+    qDebug("destroying QApplication");
     delete app;
     app = 0;
-    qDebug("destroying QApplication");
 }
 
 QTEST_APPLESS_MAIN(TestQAsioEventDispatcher)

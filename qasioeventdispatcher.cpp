@@ -61,7 +61,7 @@ public:
 
     QAtomicInt interrupt;
     QAsioSockNotifier *socketNotifierForFd(int fd, bool createIfNotFound);
-    void removeSocketNotifier(QAsioSockNotifier *sn);
+    void cleanupSocketNotifiers(bool forceRemoveAll);
     void timerTimeout(const boost::system::error_code &error);
     void timerStart();
     void timerCancel();
@@ -76,8 +76,9 @@ QAsioEventDispatcherPrivate::QAsioEventDispatcherPrivate(boost::asio::io_service
 
 QAsioEventDispatcherPrivate::~QAsioEventDispatcherPrivate()
 {
+    cleanupSocketNotifiers(true);
+    Q_ASSERT(socketNotifiers.empty());
     // cleanup timers
-    qDeleteAll(socketNotifiers);
     qDeleteAll(timerList);
 }
 
@@ -219,25 +220,25 @@ QAsioSockNotifier *QAsioEventDispatcherPrivate::socketNotifierForFd(int fd, bool
     return 0;
 }
 
-void QAsioEventDispatcherPrivate::removeSocketNotifier(QAsioSockNotifier *sn)
+void QAsioEventDispatcherPrivate::cleanupSocketNotifiers(bool forceRemoveAll = false)
 {
-    //removeAll, but there should be only one instance in the list
-
-    socketNotifiers.removeAll(sn);
-}
-
-static void fdMaybeCleanup(QAsioSockNotifier *sn)
-{
-    //cleanup must be done after last operation on this fn is finished
-    if(sn->pending_operations == 0)
-    {
-        Q_ASSERT(sn->notif[0] == 0
-            && sn->notif[1] == 0
-            && sn->notif[2] == 0);
-        delete sn->sd;
-        delete sn;
+    for(int i = 0; i < socketNotifiers.count();) {
+        QAsioSockNotifier *sn = socketNotifiers.at(i);
+        if(sn->pending_operations == 0 || forceRemoveAll) {
+            if(!forceRemoveAll) {
+                Q_ASSERT(sn->notif[0] == 0
+                    && sn->notif[1] == 0
+                    && sn->notif[2] == 0);
+            }
+            //removeAll, but there should be only one instance in the list
+            socketNotifiers.removeAll(sn);
+            delete sn->sd;
+            delete sn;
+        }
+        else {
+            ++i;
+        }
     }
-
 }
 
 static void fdReadStart(QAsioSockNotifier *sn);
@@ -256,7 +257,6 @@ static void fdReadReady(QAsioSockNotifier *sn, const boost::system::error_code& 
         QCoreApplication::sendEvent(sn->notif[type], &event);
     }
     else {
-        fdMaybeCleanup(sn);
     }
 }
 
@@ -273,7 +273,6 @@ static void fdWriteReady(QAsioSockNotifier *sn, const boost::system::error_code&
         QCoreApplication::sendEvent(sn->notif[type], &event);
     }
     else {
-        fdMaybeCleanup(sn);
     }
 }
 
@@ -295,7 +294,7 @@ static void fdWriteStart(QAsioSockNotifier *sn)
 
 void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
 {
-    std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket()) << std::endl;
+    std::clog<< __PRETTY_FUNCTION__ << LOG(notifier->type()) << LOG(notifier->socket())  << std::endl;
     Q_ASSERT(notifier);
     int sockfd = notifier->socket();
     int type = notifier->type();
@@ -312,6 +311,7 @@ void QAsioEventDispatcher::registerSocketNotifier(QSocketNotifier *notifier)
 #endif
 
     Q_D(QAsioEventDispatcher);
+    std::clog << LOG(d->socketNotifiers.size()) << std::endl;
 
     QAsioSockNotifier *sn = d->socketNotifierForFd(sockfd, true);
 
@@ -432,6 +432,7 @@ bool QAsioEventDispatcher::processEvents(QEventLoop::ProcessEventsFlags flags)
         total_events += events;
     } while(events>0);
 
+    d->cleanupSocketNotifiers();
     QCoreApplication::sendPostedEvents(); //again?
 
 
