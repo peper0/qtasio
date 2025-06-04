@@ -5,41 +5,29 @@ on:
     branches: [ main, master ]
   pull_request:
     branches: [ main, master ]
-  workflow_dispatch:
+  workflow_dispatch:  # Allows manual triggering
 
 jobs:
-  build-linux:
-    name: Build and Test (Linux)
+  build:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v3
-    
-    - name: Install Qt and dependencies
-      run: |
-        sudo apt-get update
-        # Qt packages
-        sudo apt-get install -y qt5-default qtbase5-dev qtbase5-private-dev qt5-qmake
-        sudo apt-get install -y libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5
-        # Other dependencies
-        sudo apt-get install -y libboost-dev libboost-system-dev libglib2.0-dev
-    
-    - name: Build with qmake
-      run: |
-        mkdir -p build
-        cd build
-        qmake ../qtasio.pro
-        make -j$(nproc)
-    
-    - name: Run tests
-      run: |
-        cd build/tests
-        ./qtasio_test
-    
-    - name: Upload libraries
-      uses: actions/upload-artifact@v4
+    - name: Checkout code
+      uses: actions/checkout@v3
+      
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+      
+    - name: Build and test
+      uses: docker/build-push-action@v4
       with:
-        name: qtasio-linux
-        path: |
-          build/src/libqtasio.so*
-          include/qtasio/*.h
+        context: .
+        file: ./Dockerfile
+        push: false
+        load: true
+        tags: qtasio:latest
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Run tests
+      run: docker run --rm qtasio:latest
