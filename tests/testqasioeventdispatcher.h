@@ -7,13 +7,13 @@
 #include <QtTest>
 
 #include <boost/asio/io_service.hpp>
-
+#include "qtasio/qasioeventdispatcher.h"
 
 class TestQAsioEventDispatcher : public QObject
 {
     Q_OBJECT
 public:
-    explicit TestQAsioEventDispatcher(QObject *parent = 0);
+    explicit TestQAsioEventDispatcher(QObject *parent = nullptr);
 
 signals:
 
@@ -21,7 +21,7 @@ public slots:
 
 private:
     int argc=0;
-    char *argv={0};
+    char *argv={nullptr};
     boost::asio::io_service io_service;
     QApplication *app;
 
@@ -55,7 +55,7 @@ public:
     void retranslateUi(QMainWindow *MainWindow)
     {
         Q_UNUSED(MainWindow);
-        pushButton->setText(QApplication::translate("MainWindow", "PushButton", 0));
+        pushButton->setText(QApplication::translate("MainWindow", "PushButton", nullptr));
     } // retranslateUi
 };
 
@@ -64,7 +64,7 @@ class MainWindow : public QMainWindow
     Q_OBJECT
 
 public:
-    explicit MainWindow(QWidget *parent = 0);
+    explicit MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
 private slots:
@@ -74,8 +74,8 @@ private:
     Ui_MainWindow *ui;
 
 protected:
-    void mousePressEvent(QMouseEvent *);
-    void paintEvent(QPaintEvent *);
+    void mousePressEvent(QMouseEvent *) override;
+    void paintEvent(QPaintEvent *) override;
 };
 
 

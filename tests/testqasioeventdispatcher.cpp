@@ -1,10 +1,9 @@
 #include "testqasioeventdispatcher.h"
 
-#include "qasioeventdispatcher.h"
-
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <chrono>
+#include <iostream>
 
 TestQAsioEventDispatcher::TestQAsioEventDispatcher(QObject *parent) :
     QObject(parent)
@@ -169,7 +168,7 @@ void TestQAsioEventDispatcher::cleanupTestCase()
     app->exec();
     qDebug("destroying QApplication");
     delete app;
-    app = 0;
+    app = nullptr;
 }
 
 MainWindow::MainWindow(QWidget *parent) :
@@ -186,17 +185,17 @@ MainWindow::~MainWindow()
 
 void MainWindow::paintEvent(QPaintEvent *)
 {
-    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+    std::clog << __PRETTY_FUNCTION__ << std::endl;
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *)
 {
-    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+    std::clog << __PRETTY_FUNCTION__ << std::endl;
 }
 
 void MainWindow::on_pushButton_clicked()
 {
-    std::clog<< __PRETTY_FUNCTION__  << std::endl;
+    std::clog << __PRETTY_FUNCTION__ << std::endl;
 }
 
 

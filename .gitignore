@@ -1,5 +1,4 @@
 # C++ objects and libs
-
 *.slo
 *.lo
 *.o
@@ -7,27 +6,62 @@
 *.la
 *.lai
 *.so
+*.so.*
 *.dll
 *.dylib
 
 # Qt-es
-
+object_script.*.Release
+object_script.*.Debug
+*_plugin_import.cpp
 /.qmake.cache
 /.qmake.stash
 *.pro.user
 *.pro.user.*
+*.qbs.user
+*.qbs.user.*
 *.moc
 moc_*.cpp
+moc_*.h
 qrc_*.cpp
 ui_*.h
+*.qmlc
+*.jsc
 Makefile*
-*-build-*
-build-*
+*build-*
+*.qm
+*.prl
+.qmake.stash
+*.rcc
+*target_wrapper.*
 
-# QtCreator
+# Qt Creator
+CMakeLists.txt.user*
+.qtc_clangd/
 
+# Build directories and outputs
+build/
+build-*/
+*.o
+*.so
+*.so.*
+*.dylib
+*.dll
+*.a
+*.lib
+*.exe
+*.app
+
+# Generated files
+*.gen.*
+
+# Misc
+.DS_Store
+*.swp
+*~
 *.autosave
-
-#QtCtreator Qml
-*.qmlproject.user
-*.qmlproject.user.*
+.idea/
+*.cbp
+*.plist
+*.log
+TODO.md
