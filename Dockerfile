@@ -33,12 +33,8 @@ RUN apt-get update && apt-get install -y \
 # Set Qt environment variables
 ENV QT_SELECT=qt5
 
-# Copy source code
-COPY . /app
+# Set the working directory
 WORKDIR /app
 
-# Build the project
-RUN mkdir -p build && cd build && qmake .. && make
-
-# If test executable exists, run tests
-CMD cd build-qmake-all/tests && if [ -f qtasio_test ]; then ./qtasio_test; elif [ -f ../tests/qtasio_test ]; then ../tests/qtasio_test; else echo "Tests not found, build completed successfully"; fi
+# Default command to run bash
+CMD ["/bin/bash"]
