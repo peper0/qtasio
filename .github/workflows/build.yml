@@ -1,0 +1,49 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build-linux:
+    name: Build and Test (Linux)
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Install Qt
+      uses: jurplel/install-qt-action@v3
+      with:
+        version: '5.15.2'
+        modules: 'qtcore qtgui qtwidgets qtnetwork'
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libboost-dev libboost-system-dev libglib2.0-dev 
+        # For Qt private headers
+        sudo apt-get install -y libqt5core5a-private-dev libqt5gui5-private-dev qtbase5-private-dev
+    
+    - name: Build with qmake
+      run: |
+        mkdir -p build
+        cd build
+        qmake ../qtasio.pro
+        make -j$(nproc)
+    
+    - name: Run tests
+      run: |
+        cd build/tests
+        ./qtasio_test
+    
+    - name: Upload libraries
+      uses: actions/upload-artifact@v3
+      with:
+        name: qtasio-linux
+        path: |
+          build/src/libqtasio.so*
+          include/qtasio/*.h

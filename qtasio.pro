@@ -4,7 +4,16 @@
 #
 #-------------------------------------------------
 
-QT       += core core-private platformsupport-private
+QT       += core core-private
+
+# Check if platformsupport-private is available
+qtHaveModule(platformsupport-private) {
+    QT += platformsupport-private
+} else {
+    # For newer Qt versions, try gui-private instead
+    QT += gui-private
+    DEFINES += NO_PLATFORMSUPPORT_PRIVATE
+}
 
 #only for tests
 QT       += gui testlib network
@@ -19,15 +28,18 @@ PKGCONFIG += glib-2.0
 LIBS += -lboost_system
 
 TARGET = qtasio
-TEMPLATE = app
+TEMPLATE = subdirs
 
+SUBDIRS += \
+    src \
+    tests \
+    examples
 
-SOURCES += \
-    qasioeventdispatcher.cpp \
-    testqasioeventdispatcher.cpp
+# Dependencies
+tests.depends = src
+examples.depends = src
 
-HEADERS  += \
-    qasioeventdispatcher.h \
-    testqasioeventdispatcher.h
-
-FORMS    +=
+# Other project files
+OTHER_FILES += \
+    README.md \
+    LICENSE
