@@ -15,21 +15,14 @@ jobs:
     steps:
     - uses: actions/checkout@v3
     
-    - name: Install Qt
-      uses: jurplel/install-qt-action@v3
-      with:
-        version: '5.15.2'
-        # Use proper module names for aqt
-        modules: 'qtbase qtdeclarative'
-    
-    - name: Install dependencies
+    - name: Install Qt and dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y libboost-dev libboost-system-dev libglib2.0-dev 
-        # For Qt private headers and development packages
+        # Qt packages
+        sudo apt-get install -y qt5-default qtbase5-dev qtbase5-private-dev qt5-qmake
         sudo apt-get install -y libqt5core5a libqt5gui5 libqt5widgets5 libqt5network5
-        sudo apt-get install -y qtbase5-dev qt5-qmake
-        sudo apt-get install -y libqt5core5a-private-dev libqt5gui5-private-dev qtbase5-private-dev
+        # Other dependencies
+        sudo apt-get install -y libboost-dev libboost-system-dev libglib2.0-dev
     
     - name: Build with qmake
       run: |
